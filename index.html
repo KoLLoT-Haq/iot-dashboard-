@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Sentinel | Dashboard Pemantauan</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <style>
+        /* ============ CSS AWAL (TIDAK DIUBAH) ============ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0B1120;
+            color: #F1F5F9;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(56, 189, 248, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(56, 189, 248, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 280px;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid rgba(56, 189, 248, 0.15);
+            padding: 28px 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 48px;
+            padding-left: 12px;
+        }
+
+        .logo-icon {
+            font-size: 28px;
+            color: #38BDF8;
+            filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.5));
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #FFFFFF 0%, #94A3B8 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .nav-menu {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 16px;
+            border-radius: 14px;
+            color: #CBD5E1;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .nav-item i {
+            width: 24px;
+            font-size: 1.2rem;
+        }
+
+        .nav-item.active {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38BDF8;
+            border-left: 3px solid #38BDF8;
+        }
+
+        .nav-item:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.05);
+            color: #F1F5F9;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            font-size: 12px;
+            text-align: center;
+            color: #475569;
+            padding-top: 20px;
+        }
+
+        /* MAIN CONTENT */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 32px;
+        }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(8px);
+            padding: 8px 18px;
+            border-radius: 40px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        .online-dot {
+            width: 10px;
+            height: 10px;
+            background: #10B981;
+            border-radius: 50%;
+            box-shadow: 0 0 6px #10B981;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+
+        .connection-type {
+            font-size: 12px;
+            color: #94A3B8;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 6px 16px 6px 12px;
+            border-radius: 40px;
+            cursor: pointer;
+        }
+
+        .avatar {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(145deg, #1E293B, #0F172A);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #38BDF8;
+        }
+
+        .avatar i {
+            color: #38BDF8;
+            font-size: 18px;
+        }
+
+        /* 4 KARTU STATISTIK UTAMA */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-bottom: 36px;
+        }
+
+        .stat-card {
+            background: rgba(17, 25, 45, 0.55);
+            backdrop-filter: blur(12px);
+            border-radius: 28px;
+            padding: 22px 20px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .stat-card:hover {
+            border-color: rgba(56, 189, 248, 0.6);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #94A3B8;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stat-trend {
+            font-size: 12px;
+            color: #34D399;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-value {
+            font-size: 40px;
+            font-weight: 700;
+            color: white;
+            line-height: 1.1;
+            margin-bottom: 8px;
+        }
+
+        .stat-unit {
+            font-size: 16px;
+            font-weight: 500;
+            color: #64748B;
+            margin-left: 4px;
+        }
+
+        .stat-footer {
+            font-size: 12px;
+            color: #5B6E8C;
+        }
+
+        /* KARTU TAMBAHAN: STATUS POMPA & KETINGGIAN AIR */
+        .extra-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-bottom: 36px;
+        }
+
+        .pump-card {
+            background: rgba(17, 25, 45, 0.55);
+            backdrop-filter: blur(12px);
+            border-radius: 28px;
+            padding: 22px 20px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .pump-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .pump-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        .pump-indicator.on {
+            background: #10B981;
+            box-shadow: 0 0 8px #10B981;
+        }
+
+        .pump-indicator.off {
+            background: #EF4444;
+            box-shadow: none;
+            animation: none;
+        }
+
+        .water-level-bar {
+            background: #1E293B;
+            border-radius: 20px;
+            height: 12px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .water-level-fill {
+            background: linear-gradient(90deg, #38BDF8, #2563EB);
+            width: 0%;
+            height: 100%;
+            border-radius: 20px;
+            transition: width 0.5s ease;
+        }
+
+        .water-warning {
+            color: #F59E0B;
+            font-size: 12px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .water-critical {
+            color: #EF4444;
+        }
+
+        /* GRAFIK AREA */
+        .chart-container {
+            background: rgba(17, 25, 45, 0.45);
+            backdrop-filter: blur(12px);
+            border-radius: 28px;
+            padding: 24px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            margin-bottom: 16px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 10px;
+        }
+
+        .chart-header strong {
+            font-size: 18px;
+            margin-left: 8px;
+        }
+
+        .chart-header span {
+            font-size: 13px;
+            color: #94A3B8;
+            margin-left: 8px;
+        }
+
+        .chart-legends {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .legend-suhu, .legend-kelembaban, .legend-air {
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: #1E293B;
+        }
+
+        .legend-suhu::before {
+            content: "●";
+            color: #38BDF8;
+            margin-right: 6px;
+        }
+
+        .legend-kelembaban::before {
+            content: "●";
+            color: #A78BFA;
+            margin-right: 6px;
+        }
+
+        .legend-air::before {
+            content: "●";
+            color: #34D399;
+            margin-right: 6px;
+        }
+
+        canvas {
+            max-height: 320px;
+            width: 100%;
+        }
+
+        .update-status {
+            text-align: right;
+            font-size: 12px;
+            color: #5B6E8C;
+        }
+
+        /* Tombol Kontrol Pompa */
+        .pump-control {
+            margin-top: 16px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-pump {
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            padding: 8px 16px;
+            border-radius: 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+        }
+
+        .btn-pump:hover {
+            background: rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-pump.on {
+            background: #10B981;
+            border-color: #10B981;
+        }
+
+        .btn-pump.off {
+            background: #EF4444;
+            border-color: #EF4444;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0F172A;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #38BDF8;
+            border-radius: 10px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1100px) {
+            .stats-grid, .extra-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .sidebar {
+                width: 100px;
+            }
+            .nav-item span, .logo-text {
+                display: none;
+            }
+            .nav-item i {
+                font-size: 1.5rem;
+            }
+            .nav-item {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .stats-grid, .extra-stats-grid {
+                grid-template-columns: 1fr;
+            }
+            .main-content {
+                padding: 16px;
+            }
+        }
+
+        /* CSS untuk menu lain (Analitik, Devices, Settings, Notifications) */
+        .page-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .page-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .page-header h2 {
+            font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #fff, #94A3B8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2563EB, #1E40AF);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .device-card {
+            background: rgba(17, 25, 45, 0.55);
+            border-radius: 20px;
+            padding: 16px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .notification-item {
+            background: rgba(17, 25, 45, 0.45);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 3px solid;
+        }
+
+        .notification-item.critical { border-left-color: #EF4444; }
+        .notification-item.warning { border-left-color: #F59E0B; }
+        .notification-item.info { border-left-color: #38BDF8; }
+
+        .filter-btn {
+            background: #1E293B;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            cursor: pointer;
+        }
+
+        .filter-btn.active {
+            background: #2563EB;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="logo-area">
+                <i class="fas fa-microchip logo-icon"></i>
+                <span class="logo-text">IoT Sentinel</span>
+            </div>
+            <div class="nav-menu">
+                <div class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
+                </div>
+                <div class="nav-item" data-page="analytics">
+                    <i class="fas fa-chart-line"></i><span>Analitik</span>
+                </div>
+                <div class="nav-item" data-page="devices">
+                    <i class="fas fa-microchip"></i><span>Manajemen Perangkat</span>
+                </div>
+                <div class="nav-item" data-page="settings">
+                    <i class="fas fa-sliders-h"></i><span>Pengaturan</span>
+                </div>
+                <div class="nav-item" data-page="notifications">
+                    <i class="fas fa-bell"></i><span>Notifikasi</span>
+                </div>
+            </div>
+            <div class="sidebar-footer">
+                <i class="fas fa-shield-alt"></i> Sistem Terenkripsi
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="header">
+                <div class="status-badge">
+                    <div class="online-dot"></div>
+                    <span>Sistem Online</span>
+                    <span class="connection-type">Terhubung: MQTT/WebSocket</span>
+                </div>
+                <div class="user-profile">
+                    <div class="avatar"><i class="fas fa-user-astronaut"></i></div>
+                    <span>Admin Terminal</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+
+            <!-- HALAMAN DASHBOARD (DENGAN FITUR BARU) -->
+            <div id="page-dashboard" class="page-content active">
+                <!-- 4 Kartu Statistik Utama -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-title">🌡️ SUHU UDARA <span class="stat-trend"><i class="fas fa-arrow-up"></i> +0.6°C</span></div>
+                        <div class="stat-value"><span id="suhuValue">28.5</span><span class="stat-unit">°C</span></div>
+                        <div class="stat-footer">Dari bulan lalu</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">💧 KELEMBABAN <span class="stat-trend"><i class="fas fa-minus-circle"></i> Stabil</span></div>
+                        <div class="stat-value"><span id="kelembabanValue">65</span><span class="stat-unit">%</span></div>
+                        <div class="stat-footer">RH optimal</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">🧪 SENSOR pH <span class="stat-trend"><i class="fas fa-arrow-up"></i> +0.1</span></div>
+                        <div class="stat-value"><span id="phValue">6.8</span></div>
+                        <div class="stat-footer">Netral</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">🌫️ KUALITAS UDARA <span class="stat-trend"><i class="fas fa-chart-simple"></i> 42 AQI</span></div>
+                        <div class="stat-value"><span id="aqiValue">42</span><span class="stat-unit"> AQI</span></div>
+                        <div class="stat-footer">Sedang</div>
+                    </div>
+                </div>
+
+                <!-- KARTU TAMBAHAN: STATUS POMPA, SUHU AIR, KETINGGIAN AIR -->
+                <div class="extra-stats-grid">
+                    <!-- Status Pompa -->
+                    <div class="pump-card">
+                        <div class="stat-title">🚰 STATUS POMPA</div>
+                        <div class="pump-status">
+                            <div class="pump-indicator" id="pumpIndicator"></div>
+                            <span class="stat-value" id="pumpStatusText" style="font-size: 24px;">OFF</span>
+                        </div>
+                        <div class="pump-control">
+                            <button class="btn-pump" id="pumpOnBtn" onclick="controlPump('on')">🔛 NYALAKAN</button>
+                            <button class="btn-pump" id="pumpOffBtn" onclick="controlPump('off')">🔛 MATIKAN</button>
+                        </div>
+                        <div class="stat-footer">Kontrol manual dari jarak jauh</div>
+                    </div>
+
+                    <!-- Suhu Air -->
+                    <div class="pump-card">
+                        <div class="stat-title">💧 SUHU AIR</div>
+                        <div class="stat-value"><span id="suhuAirValue">24.5</span><span class="stat-unit">°C</span></div>
+                        <div class="stat-footer">Suhu air kolam/tandon</div>
+                        <div class="water-warning" id="suhuAirWarning" style="display: none;">
+                            <i class="fas fa-exclamation-triangle"></i> Suhu air terlalu tinggi!
+                        </div>
+                    </div>
+
+                    <!-- Ketinggian Air / Volume Air -->
+                    <div class="pump-card">
+                        <div class="stat-title">📊 KETINGGIAN AIR</div>
+                        <div class="stat-value"><span id="waterLevelValue">75</span><span class="stat-unit">cm</span></div>
+                        <div class="water-level-bar">
+                            <div class="water-level-fill" id="waterLevelFill" style="width: 75%;"></div>
+                        </div>
+                        <div class="stat-footer">Kapasitas: 100 cm</div>
+                        <div id="waterWarning" class="water-warning" style="display: none;">
+                            <i class="fas fa-tint"></i> <span id="waterWarningText">Air hampir habis!</span>
+                        </div>
+                    </div>
+
+                    <!-- Volume Air (Persentase) -->
+                    <div class="pump-card">
+                        <div class="stat-title">📦 VOLUME AIR</div>
+                        <div class="stat-value"><span id="waterVolumeValue">750</span><span class="stat-unit">L</span></div>
+                        <div class="stat-footer">Sisa air dalam tandon</div>
+                        <div id="volumeWarning" class="water-warning" style="display: none;">
+                            <i class="fas fa-water"></i> Segera isi ulang!
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grafik Area (DITAMBAH SUHU AIR) -->
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div><i class="fas fa-chart-area"></i> <strong>Tren Metrik Utama</strong> <span>24 Jam Terakhir</span></div>
+                        <div class="chart-legends">
+                            <span class="legend-suhu">Suhu Udara</span>
+                            <span class="legend-kelembaban">Kelembaban</span>
+                            <span class="legend-air">Suhu Air</span>
+                        </div>
+                    </div>
+                    <canvas id="trendChart"></canvas>
+                </div>
+                <div class="update-status">
+                    <i class="fas fa-sync-alt fa-spin"></i> Data real-time dari sensor | Update tiap 5 detik
+                </div>
+            </div>
+
+            <!-- HALAMAN ANALITIK (SEDERHANA) -->
+            <div id="page-analytics" class="page-content">
+                <div class="page-header">
+                    <h2><i class="fas fa-chart-line"></i> Analitik & Laporan</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="historicalChart" height="300"></canvas>
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                    <button id="exportDataBtn" class="btn-primary">Export Data ke CSV</button>
+                </div>
+            </div>
+
+            <!-- HALAMAN MANAJEMEN PERANGKAT -->
+            <div id="page-devices" class="page-content">
+                <div class="page-header">
+                    <h2><i class="fas fa-microchip"></i> Manajemen Perangkat</h2>
+                </div>
+                <div class="devices-grid" id="devicesList"></div>
+            </div>
+
+            <!-- HALAMAN PENGATURAN -->
+            <div id="page-settings" class="page-content">
+                <div class="page-header">
+                    <h2><i class="fas fa-sliders-h"></i> Pengaturan</h2>
+                </div>
+                <div class="chart-container">
+                    <h3>Batas Peringatan</h3>
+                    <div style="margin-top: 16px;">
+                        <label>Suhu Air Maksimal: </label>
+                        <input type="number" id="maxSuhuAir" value="28" step="0.5" style="background:#1E293B; border:none; padding:8px; border-radius:8px; color:white;">
+                        <span>°C</span>
+                    </div>
+                    <div style="margin-top: 16px;">
+                        <label>Ketinggian Air Minimal: </label>
+                        <input type="number" id="minWaterLevel" value="20" step="5" style="background:#1E293B; border:none; padding:8px; border-radius:8px; color:white;">
+                        <span>cm</span>
+                    </div>
+                    <button id="saveSettingsBtn" class="btn-primary" style="margin-top: 20px;">Simpan Pengaturan</button>
+                </div>
+            </div>
+
+            <!-- HALAMAN NOTIFIKASI -->
+            <div id="page-notifications" class="page-content">
+                <div class="page-header">
+                    <h2><i class="fas fa-bell"></i> Notifikasi</h2>
+                    <button id="clearNotificationsBtn" class="btn-primary">Bersihkan Semua</button>
+                </div>
+                <div class="notification-filters" style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <button class="filter-btn active" data-filter="all">Semua</button>
+                    <button class="filter-btn" data-filter="critical">Kritis</button>
+                    <button class="filter-btn" data-filter="warning">Peringatan</button>
+                    <button class="filter-btn" data-filter="info">Info</button>
+                </div>
+                <div id="notificationsList"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ============ DATA SENSOR ============
+        let sensorData = {
+            suhuUdara: 28.5,
+            kelembaban: 65,
+            ph: 6.8,
+            aqi: 42,
+            suhuAir: 24.5,
+            waterLevel: 75,      // dalam cm (maks 100 cm)
+            waterVolume: 750,    // dalam Liter (maks 1000L)
+            pumpStatus: false     // false = OFF, true = ON
+        };
+
+        // Pengaturan batas peringatan
+        let settings = {
+            maxSuhuAir: 28,
+            minWaterLevel: 20
+        };
+
+        // Daftar notifikasi
+        let notifications = [
+            { id: 1, title: "Sistem Online", message: "Dashboard berhasil dimulai", type: "info", time: new Date() },
+            { id: 2, title: "Pompa Dalam Keadaan OFF", message: "Pompa dalam keadaan mati", type: "info", time: new Date() }
+        ];
+
+        // Data historis untuk grafik
+        let suhuUdaraHistory = [26.2,26.5,26.8,27.0,27.3,27.6,27.8,28.0,28.2,28.3,28.4,28.5,28.7,28.6,28.5,28.4,28.6,28.7,28.8,28.5,28.4,28.3,28.2,28.5];
+        let kelembabanHistory = [62,63,63,64,64,65,65,66,66,65,65,64,65,65,66,65,64,63,63,64,65,65,64,65];
+        let suhuAirHistory = [23.5,23.8,24.0,24.2,24.3,24.5,24.5,24.6,24.6,24.5,24.4,24.5,24.5,24.6,24.7,24.5,24.4,24.3,24.4,24.5,24.5,24.6,24.5,24.5];
+        let timeLabels = [];
+
+        for (let i = 23; i >= 0; i--) timeLabels.push(i + ':00');
+
+        let mainChart;
+
+        // ============ FUNGSI TAMBAH NOTIFIKASI ============
+        function addNotification(title, message, type) {
+            const newNotif = {
+                id: Date.now(),
+                title: title,
+                message: message,
+                type: type,
+                time: new Date()
+            };
+            notifications.unshift(newNotif);
+            renderNotifications();
+            
+            // Tampilkan alert jika kritis
+            if (type === 'critical') {
+                alert(`⚠️ KRITIS: ${title} - ${message}`);
+            }
+        }
+
+        // ============ CEK KONDISI DAN KIRIM NOTIFIKASI ============
+        function checkThresholdsAndNotify() {
+            // Cek suhu air
+            if (sensorData.suhuAir > settings.maxSuhuAir) {
+                addNotification('Suhu Air Tinggi', `Suhu air mencapai ${sensorData.suhuAir}°C (Melebihi batas ${settings.maxSuhuAir}°C)`, 'warning');
+                document.getElementById('suhuAirWarning').style.display = 'flex';
+            } else {
+                document.getElementById('suhuAirWarning').style.display = 'none';
+            }
+
+            // Cek ketinggian air (AIR HABIS)
+            if (sensorData.waterLevel <= settings.minWaterLevel) {
+                addNotification('AIR HAMPIR HABIS!', `Ketinggian air hanya ${sensorData.waterLevel} cm dari batas minimal ${settings.minWaterLevel} cm`, 'critical');
+                document.getElementById('waterWarning').style.display = 'flex';
+                document.getElementById('waterWarningText').innerHTML = '⚠️ AIR HAMPIR HABIS! Segera isi ulang!';
+                document.getElementById('volumeWarning').style.display = 'flex';
+            } else if (sensorData.waterLevel <= settings.minWaterLevel + 10) {
+                addNotification('Peringatan Air', `Ketinggian air ${sensorData.waterLevel} cm (Mendekati batas minimal)`, 'warning');
+                document.getElementById('waterWarning').style.display = 'flex';
+                document.getElementById('waterWarningText').innerHTML = '⚠️ Air mulai menipis, waspadai!';
+            } else {
+                document.getElementById('waterWarning').style.display = 'none';
+                document.getElementById('volumeWarning').style.display = 'none';
+            }
+
+            // Cek jika volume air sangat rendah (di bawah 100L)
+            if (sensorData.waterVolume < 100) {
+                addNotification('Volume Air Kritis', `Sisa air tinggal ${sensorData.waterVolume} Liter!`, 'critical');
+            }
+        }
+
+        // ============ KONTROL POMPA ============
+        function controlPump(action) {
+            if (action === 'on') {
+                sensorData.pumpStatus = true;
+                addNotification('Pompa Dinyalakan', 'Pompa air diaktifkan dari jarak jauh', 'info');
+                document.getElementById('pumpStatusText').innerHTML = 'ON';
+                document.getElementById('pumpIndicator').className = 'pump-indicator on';
+            } else {
+                sensorData.pumpStatus = false;
+                addNotification('Pompa Dimatikan', 'Pompa air dimatikan dari jarak jauh', 'info');
+                document.getElementById('pumpStatusText').innerHTML = 'OFF';
+                document.getElementById('pumpIndicator').className = 'pump-indicator off';
+            }
+        }
+
+        // ============ UPDATE TAMPILAN DASHBOARD ============
+        function updateDashboardDisplay() {
+            // Update nilai di kartu
+            document.getElementById('suhuValue').innerText = sensorData.suhuUdara.toFixed(1);
+            document.getElementById('kelembabanValue').innerText = sensorData.kelembaban;
+            document.getElementById('phValue').innerText = sensorData.ph.toFixed(1);
+            document.getElementById('aqiValue').innerText = sensorData.aqi;
+            document.getElementById('suhuAirValue').innerText = sensorData.suhuAir.toFixed(1);
+            document.getElementById('waterLevelValue').innerText = sensorData.waterLevel;
+            document.getElementById('waterVolumeValue').innerText = sensorData.waterVolume;
+            
+            // Update bar ketinggian air
+            let waterPercent = (sensorData.waterLevel / 100) * 100;
+            document.getElementById('waterLevelFill').style.width = waterPercent + '%';
+            
+            // Update status pompa
+            if (sensorData.pumpStatus) {
+                document.getElementById('pumpStatusText').innerHTML = 'ON';
+                document.getElementById('pumpIndicator').className = 'pump-indicator on';
+            } else {
+                document.getElementById('pumpStatusText').innerHTML = 'OFF';
+                document.getElementById('pumpIndicator').className = 'pump-indicator off';
+            }
+
+            // Update grafik
+            suhuUdaraHistory.push(sensorData.suhuUdara);
+            suhuUdaraHistory.shift();
+            kelembabanHistory.push(sensorData.kelembaban);
+            kelembabanHistory.shift();
+            suhuAirHistory.push(sensorData.suhuAir);
+            suhuAirHistory.shift();
+
+            if (mainChart) {
+                mainChart.data.datasets[0].data = suhuUdaraHistory;
+                mainChart.data.datasets[1].data = kelembabanHistory;
+                mainChart.data.datasets[2].data = suhuAirHistory;
+                mainChart.update('none');
+            }
+
+            // Update status text
+            document.querySelector('.update-status').innerHTML = 
+                `<i class="fas fa-check-circle" style="color:#10B981"></i> Data diperbarui: ${new Date().toLocaleTimeString()}`;
+            
+            // Cek threshold
+            checkThresholdsAndNotify();
+        }
+
+        // ============ SIMULASI DATA REAL-TIME ============
+        function simulateRealtimeData() {
+            // Simulasi perubahan nilai sensor
+            sensorData.suhuUdara = Number((28 + Math.random() * 2).toFixed(1));
+            sensorData.kelembaban = Math.floor(62 + Math.random() * 8);
+            sensorData.ph = Number((6.6 + Math.random() * 0.5).toFixed(1));
+            sensorData.aqi = Math.floor(38 + Math.random() * 15);
+            
+            // Simulasi suhu air (naik turun perlahan)
+            let suhuAirChange = (Math.random() - 0.5) * 0.3;
+            sensorData.suhuAir = Number(Math.min(35, Math.max(20, sensorData.suhuAir + suhuAirChange)).toFixed(1));
+            
+            // Simulasi ketinggian air (berkurang perlahan jika pompa menyala)
+            if (sensorData.pumpStatus) {
+                // Jika pompa menyala, air berkurang lebih cepat
+                sensorData.waterLevel = Math.max(0, sensorData.waterLevel - (Math.random() * 2));
+                sensorData.waterVolume = Math.max(0, sensorData.waterVolume - (Math.random() * 20));
+            } else {
+                // Jika pompa mati, air berkurang sedikit (evaporasi)
+                sensorData.waterLevel = Math.max(0, sensorData.waterLevel - (Math.random() * 0.3));
+                sensorData.waterVolume = Math.max(0, sensorData.waterVolume - (Math.random() * 3));
+            }
+            
+            sensorData.waterLevel = Number(sensorData.waterLevel.toFixed(1));
+            sensorData.waterVolume = Math.floor(sensorData.waterVolume);
+            
+            updateDashboardDisplay();
+        }
+
+        // ============ INISIALISASI GRAFIK ============
+        function initDashboardChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            
+            const gradientUdara = ctx.createLinearGradient(0, 0, 0, 300);
+            gradientUdara.addColorStop(0, 'rgba(56, 189, 248, 0.7)');
+            gradientUdara.addColorStop(0.6, 'rgba(56, 189, 248, 0.1)');
+            
+            const gradientAir = ctx.createLinearGradient(0, 0, 0, 300);
+            gradientAir.addColorStop(0, 'rgba(52, 211, 153, 0.5)');
+            gradientAir.addColorStop(0.6, 'rgba(52, 211, 153, 0.05)');
+            
+            mainChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [
+                        { label: 'Suhu Udara (°C)', data: suhuUdaraHistory, borderColor: '#38BDF8', backgroundColor: gradientUdara, borderWidth: 3, pointRadius: 3, tension: 0.3, fill: true },
+                        { label: 'Kelembaban (%)', data: kelembabanHistory, borderColor: '#A78BFA', borderWidth: 2.5, borderDash: [5, 5], tension: 0.3, fill: false },
+                        { label: 'Suhu Air (°C)', data: suhuAirHistory, borderColor: '#34D399', borderWidth: 2.5, tension: 0.3, fill: false }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        tooltip: { mode: 'index', intersect: false },
+                        legend: { labels: { color: '#CBD5E1' } }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { color: '#94A3B8' } },
+                        y: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { color: '#94A3B8' } }
+                    }
+                }
+            });
+        }
+
+        // ============ RENDER NOTIFIKASI ============
+        function renderNotifications(filter = 'all') {
+            let filtered = notifications;
+            if (filter === 'critical') filtered = notifications.filter(n => n.type === 'critical');
+            else if (filter === 'warning') filtered = notifications.filter(n => n.type === 'warning');
+            else if (filter === 'info') filtered = notifications.filter(n => n.type === 'info');
+            
+            const container = document.getElementById('notificationsList');
+            if (!container) return;
+            
+            container.innerHTML = filtered.map(notif => `
+                <div class="notification-item ${notif.type}">
+                    <div style="flex:1">
+                        <strong>${notif.title}</strong><br>
+                        <small>${notif.message}</small><br>
+                        <small style="color:#64748B">${notif.time.toLocaleTimeString()}</small>
+                    </div>
+                    <span>${notif.type === 'critical' ? '🔴' : (notif.type === 'warning' ? '🟡' : '🔵')}</span>
+                </div>
+            `).join('');
+        }
+
+        function clearNotifications() {
+            notifications = notifications.filter(n => n.type === 'info' && n.title === 'Sistem Online');
+            renderNotifications();
+        }
+
+        // ============ RENDER DEVICES ============
+        function renderDevices() {
+            const devices = [
+                { name: 'ESP32 - Sensor Utama', location: 'Zona A', status: 'online', ip: '192.168.1.101' },
+                { name: 'ESP8266 - Sensor Air', location: 'Tandon Air', status: 'online', ip: '192.168.1.102' },
+                { name: 'STM32 - Kontrol Pompa', location: 'Ruang Pompa', status: 'online', ip: '192.168.1.103' },
+                { name: 'Orange Pi - Gateway', location: 'Server Room', status: 'online', ip: '192.168.1.100' }
+            ];
+            
+            const container = document.getElementById('devicesList');
+            if (!container) return;
+            
+            container.innerHTML = devices.map(d => `
+                <div class="device-card">
+                    <h4><i class="fas fa-microchip"></i> ${d.name}</h4>
+                    <p><i class="fas fa-map-marker-alt"></i> ${d.location}</p>
+                    <p><i class="fas fa-network-wired"></i> IP: ${d.ip}</p>
+                    <p><span style="color:#10B981">● Online</span></p>
+                </div>
+            `).join('');
+        }
+
+        // ============ PAGE ROUTING ============
+        function showPage(pageId) {
+            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+            document.getElementById(`page-${pageId}`).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(nav => {
+                nav.classList.remove('active');
+                if (nav.getAttribute('data-page') === pageId) nav.classList.add('active');
+            });
+        }
+
+        // ============ INITIALIZATION ============
+        document.addEventListener('DOMContentLoaded', () => {
+            initDashboardChart();
+            renderDevices();
+            renderNotifications();
+            
+            // Load settings dari localStorage
+            if (localStorage.getItem('iotSettings')) {
+                const saved = JSON.parse(localStorage.getItem('iotSettings'));
+                settings = saved;
+                document.getElementById('maxSuhuAir').value = settings.maxSuhuAir;
+                document.getElementById('minWaterLevel').value = settings.minWaterLevel;
+            }
+            
+            // Event Listeners
+            document.querySelectorAll('.nav-item').forEach(nav => {
+                nav.addEventListener('click', () => showPage(nav.getAttribute('data-page')));
+            });
+            
+            document.getElementById('saveSettingsBtn')?.addEventListener('click', () => {
+                settings.maxSuhuAir = parseFloat(document.getElementById('maxSuhuAir').value);
+                settings.minWaterLevel = parseFloat(document.getElementById('minWaterLevel').value);
+                localStorage.setItem('iotSettings', JSON.stringify(settings));
+                addNotification('Pengaturan Disimpan', 'Batas peringatan telah diperbarui', 'info');
+                alert('Pengaturan berhasil disimpan!');
+            });
+            
+            document.getElementById('clearNotificationsBtn')?.addEventListener('click', clearNotifications);
+            document.getElementById('exportDataBtn')?.addEventListener('click', () => {
+                addNotification('Ekspor Data', 'Data berhasil diekspor ke CSV', 'info');
+                alert('Data berhasil diekspor (simulasi)');
+            });
+            
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderNotifications(btn.getAttribute('data-filter'));
+                });
+            });
+            
+            // Simulasi data real-time setiap 5 detik
+            setInterval(simulateRealtimeData, 5000);
+            
+            // Tampilkan selamat datang
+            addNotification('Selamat Datang', 'Dashboard IoT Sentinel siap digunakan', 'info');
+        });
+    </script>
+</body>
+</html>
